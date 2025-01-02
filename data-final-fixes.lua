@@ -33,7 +33,7 @@ local gas_list = { "oxygen", "nitrogen", "carbon-dioxide", "argon" }
 local enforce_percentage = settings.startup["PlanetsLib-enforce-gas-percentage"].value --Whether code should assert that combined gas contents add up to less than 100%.
 
 for _, p in pairs(data.raw.planet) do
-	if enforce_percentage then
+	if p.surface_properties and enforce_percentage then
 		local gas_content = 0
 		for _, gas in pairs(gas_list) do
 			if p.surface_properties[gas] then
