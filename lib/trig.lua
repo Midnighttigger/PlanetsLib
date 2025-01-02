@@ -21,4 +21,16 @@ function Public.Polar_add(P1,P2) -- add 2 polar coords {distance,orientation}
 	end
 end
 
+function Public.Coord_add(C1,C2) -- add 2 cartesian coords {x,y}
+	return {C1[1]+C2[1],C1[2]+C2[2]}
+end
+
+function Public.Coord_scale(C0,m) -- multiplies a cartesian coordinate by an amount
+	return {m*C0[1],m*C0[2]}
+end
+
+function Public.Coord_multiply(C1,C2) -- multiplies 2 caresian coordinates together {x1*x2,y1*y2}
+	return {C1[1]*C2[1],C1[2]*C2[2]}
+end
+
 return Public
