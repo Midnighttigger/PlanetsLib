@@ -2,6 +2,12 @@ data:extend {
     {
         type = "bool-setting",
         setting_type = "startup",
+        name = "PlanetsLib-optimize-orbits",
+        default_value=true
+    },
+    {
+        type = "bool-setting",
+        setting_type = "startup",
         name = "PlanetsLib-enable-temperature",
         forced_value = false,
         default_value=false,
