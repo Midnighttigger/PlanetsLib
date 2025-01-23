@@ -10,7 +10,7 @@ Contributors:
 
 * [thesixthroc](https://mods.factorio.com/user/thesixthroc)
 * [Tserup](https://mods.factorio.com/user/Tserup) (art)
-* [MidnightTigger](https://mods.factorio.com/user/Midnighttigger)
+* [Midnighttigger](https://mods.factorio.com/user/Midnighttigger)
 * [notnotmelon](https://mods.factorio.com/user/notnotmelon)
 * [MeteorSwarm](https://mods.factorio.com/user/MeteorSwarm)
 
@@ -33,8 +33,12 @@ Planet prototypes and space location prototypes can be defined using the followi
         * `distance` — Number: orbital distance from parent
         * `orientation` — Number: orbital angle from parent (0-1). Note that orientation is absolute, not relative to the parent's orientation.
         * `sprite` — Object (optional): Sprite for the planet’s orbit, centered on its parent.
+        * `eccentricity` — Number: Eccentricity of the orbit, default is 0 which is a circle.
+        * `periapsis` — Number: Orientation at closest approach to the parent, mandatory when eccentricity is defined and not 0.
     * `sprite_only` — Boolean (optional): If true, this prototype will be removed in `data-final-fixes` and replaced by its sprites on the starmap (unless neither `starmap_icon`, `starmap_icons` nor an orbit sprite are defined, in which case nothing will show).
         * This is useful for constructing stars and other locations that should not have a space platform 'docking ring'.
+    * `background_sprite` — Boolean (optional): If true, this prototype will be removed in `data-final-fixes` and replaced by its sprites on the starmap (unless neither `starmap_icon`, `starmap_icons` nor an orbit sprite are defined, in which case nothing will show).
+        * This is useful for background sprites.
     * Other valid `planet` or `space-location` prototype fields
     * Further notes on `PlanetsLib:extend`:
         * Should not be called in `data-final-fixes`.
