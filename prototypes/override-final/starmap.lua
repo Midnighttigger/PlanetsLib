@@ -1,164 +1,159 @@
 local orbits = require("lib.orbits")
+local trig = require("lib.trig")
+local sprite = require("lib.sprite")
+
 
 local Public = {}
 local starmap_layers = {}
 
--- Orbits help us construct the system. In data-final-fixes, it's now better to rely on the game variables (distance and orientation) for the position of each space location, for compatibility with other mods.
+--Finds loadorder
+local planetlist = {}
+for _,planettype in pairs({"space-location"},{"planet"}) do
+	for _,planet in pairs(data.raw[planettype]) do
+		table.insert(planetlist,planet)
+	end
+end
+local loadorder = {}
+while planetlist[1] do
+	for _,planet in pairs(planetlist) do
+		if planet.orbit and planet.orbit.parent then
+			assert(planet.orbit.parent.type and planet.orbit.parent.name, planet.type..": "..planet.name.." doesn't have properly defined parent")
+			assert(parent.type == "planet" or parent.type == "space-location","Parent types other than planet or space-location are not yet supported")
+			assert(data.raw[planet.orbit.parent.type][planet.orbit.parent.name],planet.type..": "..planet.name.." has an orbit around a parent which doesn't exist")
+			local found = false
+			for _,loaded in pairs(loadorder) do
+				if loaded.type == planet.orbit.parent.type and loaded.name == planet.orbit.parent.name then
+					found = true
+				end
+			end
+			if found then
+				table.insert(loadorder,planet)
+				planet = nil
+			end
+		else
+			table.insert(loadorder,planet)
+			planet = nil
+		end
+	end
+end
+
+--Sets starmap position's
+for _,planet in pairs(loadorder) do
+	local planet_data = data.raw[planet.type][planet.name]
+	if planet.orbit and planet.orbit.parent then
+		planet_data.distance, planet_data.orientation = orbits.get_quick_position(planet.orbit)
+		local parent_data = data.raw["planet.orbit.parent.type"]["planet.orbit.parent.name"]
+		if parent_data.distance == 0 and settings.startup["PlanetsLib-optimize-orbits"].value and not planet.force_sprite then --use hardcoded vector circles when available
+			planet_data.orbit.sprite = nil
+			planet.orbit.sprite = nil
+		end
+	elseif planet.orbit then
+		planet_data.distance, planet_data.orientation = planet.orbit.distance, planet.orbit.orientation
+		planet.orbit = nil
+		planet_data.orbit = nil
+	end
+	if planet.background_sprite then -- Allow background sprites
+		local pos_x = 32*planet.distance*math.sin(planet.orientation*2*math.pi)
+		local pos_y = 32*planet.distance*math.cos(planet.orientation*2*math.pi)
+		for _,sp in pairs(sprite.decay(sprite.manipulate_scale(planet.starmap_icon,{pos_x,pos_y},planet.magnitude))) do
+			table.insert(starmap_layers,sp)
+		end
+		planet_data = nil
+		planet = nil
+	end
+end
+
+--Orbit Sprites and sprite_only planets
+for _,planet in pairs(loadorder) do
+	
+end
 
 function Public.update_starmap_layers(planet)
-	if planet.sprite_only and (planet.starmap_icon or planet.starmap_icons) then
-		local magnitude = planet.magnitude or 1
-
-		local x, y = orbits.get_rectangular_position(planet.distance * 32, planet.orientation)
-
-		if planet.starmap_icons then
-			for _, sprite in pairs(planet.starmap_icons) do
-				local scaled_sprite = util.table.deepcopy(sprite)
-				scaled_sprite.scale = scaled_sprite.scale * (magnitude * 32)
-
-				Public.add_sprite_to_starmap(sprite, { x = x, y = y })
-			end
-		elseif planet.starmap_icon then
-			local icon_size = planet.starmap_icon_size or 64
-
-			Public.add_sprite_to_starmap({
-				filename = planet.starmap_icon,
-				size = icon_size,
-				scale = (magnitude * 32) / icon_size,
-			}, { x = x, y = y })
-		end
-	end
-
-	if planet.orbit and planet.orbit.sprite then
-		Public.draw_orbit_of_planet(planet)
-
-		return { should_disable_default_orbit_sprite = true }
-	end
-
-	return { should_disable_default_orbit_sprite = false }
-end
-
-function Public.draw_orbit_of_planet(planet)
 	local orbit = planet.orbit
-	local parent = orbit.parent
-
-	assert(
-		parent.type == "planet" or parent.type == "space-location",
-		"Parent types other than planet or space-location are not yet supported"
-	)
-
-	local distance_from_orbit = orbits.get_absolute_polar_position_from_orbit(orbit)
-
-	if distance_from_orbit ~= planet.distance then
-		-- Another mod has intercepted, so let's not risk drawing any orbit sprite.
-
-		return { should_disable_default_orbit_sprite = true }
+	if not orbit then
+		return
 	end
+	local parent = planet.orbit.parent
 
+	assert(parent.type == "planet" or parent.type == "space-location","Parent types other than planet or space-location are not yet supported")
+	
+	local orbit_distance, orbit_orientation = orbits.get_absolute_polar_position_from_orbit(orbit)
+	
 	local parent_data = data.raw[parent.type][parent.name]
+	local parent_orbit = parent_data.orbit
 
-	local parent_x, parent_y = orbits.get_rectangular_position(parent_data.distance * 32, parent_data.orientation)
+	assert(parent_orbit, "Parent " .. parent.name .. " has no orbit")
 
-	if orbit.sprite.layers then
-		for _, layer in pairs(orbit.sprite.layers) do
-			Public.add_sprite_to_starmap(layer, { x = parent_x, y = parent_y })
+	local parent_distance, parent_orientation = orbits.get_absolute_polar_position_from_orbit(parent_orbit)
+
+	if orbit.eccentricity and orbit.eccentricity > 0 then
+		assert(orbit.periapsis, "If the orbit is elliptical, a periapsis (closest approach orientation) must be provided")
+		local central_distance,central_orientation = trig.Polar_add({parent_distance,parent_orientation},{(orbit_distance*orbit.eccentricity)/(1-orbit.eccentricity),orbit.periapsis+0.5})
+		local central_x = central_distance*math.sin(central_orientation*2*math.pi)
+		local central_y = central_distance*math.cos(central_orientation*2*math.pi)
+		if orbit.sprite then
+			if orbit.sprite.layers then
+				for _, layer in pairs(orbit.sprite.layers) do
+					Public.update_starmap_from_sprite(layer, 32*central_x, -32*central_y)
+				end
+			else
+				Public.update_starmap_from_sprite(orbit.sprite, 32*central_x, -32*central_y)
+			end
 		end
 	else
-		Public.add_sprite_to_starmap(orbit.sprite, { x = parent_x, y = parent_y })
+		local central_x = parent_distance*math.sin(parent_orientation*2*math.pi)
+		local central_y = parent_distance*math.cos(parent_orientation*2*math.pi)
+		if orbit.sprite then
+			if orbit.sprite.layers then
+				for _, layer in pairs(orbit.sprite.layers) do
+					Public.update_starmap_from_sprite(layer, 32*central_x, -32*central_y)
+				end
+			else
+				Public.update_starmap_from_sprite(orbit.sprite, 32*central_x, -32*central_y)
+			end
+		end
+	end
+
+	planet.draw_orbit = false
+
+	if planet.sprite_only then
+		local central_x = orbit_distance*math.sin(orbit_orientation*2*math.pi)
+		local central_y = orbit_distance*math.cos(orbit_orientation*2*math.pi)
+		table.insert(starmap_layers, {
+			filename = planet.starmap_icon,
+			size = planet.starmap_icon_size,
+			scale = (planet.magnitude*32)/planet.starmap_icon_size,
+			shift = {32*central_x,-32*central_y},
+		})
 	end
 end
 
-function Public.add_sprite_to_starmap(sprite, extra_displacement)
+function Public.update_starmap_from_sprite(sprite, x, y)
 	local sprite_copy = util.table.deepcopy(sprite)
-
-	local shift_x = 0
-	local shift_y = 0
-
-	if sprite_copy.shift then
-		if sprite_copy.shift.x then
-			shift_x = shift_x + sprite_copy.shift.x
-			shift_y = shift_y + sprite_copy.shift.y
-		else
-			shift_x = shift_x + sprite_copy.shift[1]
-			shift_y = shift_y + sprite_copy.shift[2]
-		end
-	end
-
-	if extra_displacement then
-		if extra_displacement.x and extra_displacement.y then
-			shift_x = shift_x + extra_displacement.x
-			shift_y = shift_y + extra_displacement.y
-		else
-			shift_x = shift_x + extra_displacement[1]
-			shift_y = shift_y + extra_displacement[2]
-		end
-	end
-
 	sprite_copy.shift = {
-		shift_x,
-		shift_y,
+		(sprite_copy.shift and sprite_copy.shift[1] or 0) + x,
+		(sprite_copy.shift and sprite_copy.shift[2] or 0) + y,
 	}
-
 	table.insert(starmap_layers, sprite_copy)
 end
 
--- Now begins the algorithm:
-
-local locations = {}
-
-for _, type in pairs({ "space-location", "planet" }) do
-	for _, location in pairs(data.raw[type]) do
-		locations[#locations + 1] = location
-	end
+--todo: what if a sprite of layers have different scales in the subsprites?
+--todo: elliptical orbit sprite creation documentation
+--todo: test ellptical orbit
+for _, planet in pairs(data.raw["planet"]) do
+	Public.update_starmap_layers(planet)
+end
+for _, space_location in pairs(data.raw["space-location"]) do
+	Public.update_starmap_layers(space_location)
 end
 
-local ordered_locations = {}
-
-local visited = {}
-local temporary_marks = {}
-
-local function visit(location, ordered)
-	if temporary_marks[location.name] then
-		if not (location.orbit and location.orbit.parent and location.orbit.parent.name == location.name) then -- Self-parents are acceptable. Presumably this is only the case for data.raw["space-location"]["star"].
-			error("Circular orbit dependency detected at " .. location.name)
-		end
+local starmap = data.raw["utility-sprites"]["default"].starmap_star
+if starmap.layers then
+	for _,starmap_layer in pairs(starmap_layers) do
+		table.insert(starmap.layers,starmap_layer)
 	end
-	if not visited[location.name] then
-		temporary_marks[location.name] = true
-
-		if location.orbit and location.orbit.parent then
-			local parent_type = location.orbit.parent.type
-			local parent_name = location.orbit.parent.name
-
-			if parent_name ~= location.name then
-				local parent = data.raw[parent_type][parent_name]
-				if parent then
-					visit(parent, ordered)
-				end
-			end
-		end
-
-		temporary_marks[location.name] = false
-		visited[location.name] = true
-		table.insert(ordered, location)
-	end
-end
-
-for _, location in pairs(locations) do
-	if not visited[location.name] then
-		visit(location, ordered_locations)
-	end
-end
-
-for _, location in pairs(ordered_locations) do
-	local result = Public.update_starmap_layers(location)
-	if result.should_disable_default_orbit_sprite then
-		location.draw_orbit = false
-	end
-end
-
-if #starmap_layers > 0 then
-	data.raw["utility-sprites"]["default"].starmap_star = { layers = starmap_layers }
+else
+	starmap = {layers=starmap_layers}
 end
 
 return Public

@@ -1,57 +1,45 @@
 local Public = {}
 
+require("lib.trig")
+
+local Public = {}
+
 function Public.get_absolute_polar_position_from_orbit(orbit)
 	local parent = orbit.parent
-
-	assert(
-		parent.type == "planet" or parent.type == "space-location",
-		"Parent types other than planet or space-location are not yet supported"
-	)
-
-	if parent.name == "star" then
-		return orbit.distance, orbit.orientation
+	if parent then
+		assert(parent.type == "planet" or parent.type == "space-location", "Parent types other than planet or space-location are not yet supported")
+		local parent_data = data.raw[parent.type][parent.name]
+		local parent_distance = parent_data.distance
+		local parent_orientation = parent_data.orientation
+	else
+		local parent_distance = 0
+		local parent_orientation = 0
+		local parent_data = nil
 	end
-
-	local parent_data = data.raw[parent.type][parent.name]
-
-	local parent_distance = parent_data.distance
-	local parent_orientation = parent_data.orientation
-
-	if parent_data.orbit then -- Overwrite distance and orientation
+	if (parent_data and parent_data.orbit or not) and not (parent_distance == 0) then
 		parent_distance, parent_orientation = Public.get_absolute_polar_position_from_orbit(parent_data.orbit)
 	end
-
-	local parent_angle = parent_orientation * 2 * math.pi
-	local orbit_angle = orbit.orientation * 2 * math.pi -- Note that this isn't rotated by the parent's orientation.
-
-	local px = parent_distance * math.cos(parent_angle)
-	local py = parent_distance * math.sin(parent_angle)
-
-	local ox = orbit.distance * math.cos(orbit_angle)
-	local oy = orbit.distance * math.sin(orbit_angle)
-
-	local x = px + ox
-	local y = py + oy
-
-	local distance = math.sqrt(x * x + y * y)
-	local orientation = math.atan2(y, x) / (2 * math.pi)
-
-	if orientation < 0 then
-		orientation = orientation + 1
-	end
-	if orientation > 1 then
-		orientation = orientation - 1
-	end
-
-	return distance, orientation
-end
-
-function Public.get_rectangular_position(distance, orientation)
-	if distance == 0 then
-		return 0, 0
+	if parent_data then
+		return Public.get_quick_position(orbit)
 	else
-		return distance * math.sin(orientation * 2 * math.pi), -distance * math.cos(orientation * 2 * math.pi)
+		return orbit.distance, orbit.orientation
 	end
 end
+function Public.get_quick_position(orbit)
+	local parent = orbit.parent
+	assert(parent.type == "planet" or parent.type == "space-location", "Parent types other than planet or space-location are not yet supported")
+	local parent_data = data.raw[parent.type][parent.name]
+	local parent_distance = parent_data.distance
+	local parent_orientation = parent_data.orientation
+	if orbit.eccentricity and orbit.eccentricity > 0 then
+		assert(orbit.periapsis, "If the orbit is elliptical, a periapsis (closest approach orientation) must be provided")
+		local polar = trig.Polar_add({parent_distance,parent_orientation},{((1+orbit.eccentricity)*orbit.distance)/(1+orbit.eccentricity*math.cos((orbit.orientation-orbit.periapsis)*2*math.pi)),orbit.orientation})
+		return polar[1], polar[2]
+	else
+		local polar = trig.Polar_add({orbit.distance,orbit.orientation},{parent_distance,parent_orientation})
+		return polar[1], polar[2]
+	end
+end
+return Public
 
 return Public
