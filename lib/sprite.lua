@@ -68,6 +68,8 @@ function Public.manipulate_scale(spr0,ccpos,scale) -- similar to Public.manipula
 end
 local imglimit = 4096 -- is there a way to find out procederally?
 function Public.decay(spr) -- splits a sprite until its within the image limit, not implemented yet
+	return spr
+	--[[
 	if spr.layers then
 		local sprite = table.deepcopy(spr)
 	else
@@ -112,5 +114,6 @@ function Public.decay(spr) -- splits a sprite until its within the image limit, 
 		end
 	end
 	return sprite
+	]]--
 end
 return Public
